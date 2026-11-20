@@ -16,34 +16,20 @@ canvas{background:#f0d9a0;border:1px solid #b8956a;border-radius:4px;max-width:1
 </head>
 <body>
 <div class="bar">
-  <a href="javascript:history.back()">返回</a>
+  <!--<a href="javascript:history.back()">返回</a>-->
   <span id="info"></span>
   <button onclick="init()">重新开始</button>
 </div>
 <div class="record" id="record"></div>
 <canvas id="cvs"></canvas>
 <script>
-const ID='gomoku';
-const N=15;
-let board,turn,over,lastMove,busy;
-let sec,timer,infoBase;
-let botTimer = null; // 🔧 修复：AI 定时器句柄
+const ID='gomoku';const N=15;
+let board,turn,over,lastMove,busy,sec,timer,infoBase,botTimer=null;
 
 const SafeStorage = (function() {
   let storage;
-  try {
-    const testKey = '__test__';
-    window.localStorage.setItem(testKey, testKey);
-    window.localStorage.removeItem(testKey);
-    storage = window.localStorage;
-  } catch (e) {
-    const memory = {};
-    storage = {
-      getItem: (k) => memory[k] || null,
-      setItem: (k, v) => { memory[k] = String(v); },
-      removeItem: (k) => { delete memory[k]; }
-    };
-  }
+  try { const t='__t__'; window.localStorage.setItem(t,t); window.localStorage.removeItem(t); storage=window.localStorage; } 
+  catch(e) { const m={}; storage={getItem:k=>m[k]||null,setItem:(k,v)=>m[k]=String(v),removeItem:k=>delete m[k]}; }
   return storage;
 })();
 
@@ -55,19 +41,13 @@ function getCanvasSize() {
 
 function init(){
   if(timer){clearInterval(timer);timer=null;}
-  if(botTimer){clearTimeout(botTimer);botTimer=null;} // 🔧 修复：重开时清空未执行的 AI 回合
-  
+  if(botTimer){clearTimeout(botTimer);botTimer=null;}
   board=Array.from({length:N},()=>Array(N).fill(0));
-  turn=1;over=false;lastMove=null;busy=false;
-  sec=0;
+  turn=1;over=false;lastMove=null;busy=false;sec=0;
   cvs=document.getElementById('cvs');
-  
   size = getCanvasSize();
-  cvs.width = size; 
-  cvs.height = size;
-  
-  ctx=cvs.getContext('2d');
-  cell=size/N;
+  cvs.width = size; cvs.height = size;
+  ctx=cvs.getContext('2d'); cell=size/N;
   drawBoard();
   setInfo('黑棋落子');
   showRecord();
@@ -75,17 +55,8 @@ function init(){
   save();
 }
 
-function tick(){
-  if(over)return;
-  sec++;
-  setInfo(infoBase);
-  save();
-}
-
-function setInfo(t){
-  infoBase=t;
-  document.getElementById('info').textContent=t+(over?'':' · '+sec+'s');
-}
+function tick(){if(over)return;sec++;setInfo(infoBase);save();}
+function setInfo(t){infoBase=t;document.getElementById('info').textContent=t+(over?'':' · '+sec+'s');}
 
 function drawBoard(){
   if(!ctx) return;
@@ -97,20 +68,15 @@ function drawBoard(){
   }
   for(let r=0;r<N;r++)for(let c=0;c<N;c++){
     if(board[r][c]){
-      ctx.beginPath();
-      ctx.arc(c*cell+cell/2,r*cell+cell/2,cell*0.4,0,Math.PI*2);
-      ctx.fillStyle=board[r][c]===1?'#000':'#fff';
-      ctx.fill();
-      ctx.strokeStyle=board[r][c]===1?'#000':'#ccc';
-      ctx.lineWidth=1;ctx.stroke();
+      ctx.beginPath();ctx.arc(c*cell+cell/2,r*cell+cell/2,cell*0.4,0,Math.PI*2);
+      ctx.fillStyle=board[r][c]===1?'#000':'#fff';ctx.fill();
+      ctx.strokeStyle=board[r][c]===1?'#000':'#ccc';ctx.lineWidth=1;ctx.stroke();
     }
   }
   if(lastMove){
     let[lr,lc]=lastMove;
-    ctx.beginPath();
-    ctx.arc(lc*cell+cell/2,lr*cell+cell/2,cell*0.12,0,Math.PI*2);
-    ctx.fillStyle=board[lr][lc]===1?'#fff':'#000';
-    ctx.fill();
+    ctx.beginPath();ctx.arc(lc*cell+cell/2,lr*cell+cell/2,cell*0.12,0,Math.PI*2);
+    ctx.fillStyle=board[lr][lc]===1?'#fff':'#000';ctx.fill();
   }
 }
 
@@ -122,14 +88,13 @@ function place(e){
   const c=Math.round((x-cell/2)/cell), r=Math.round((y-cell/2)/cell);
   if(r<0||r>=N||c<0||c>=N||board[r][c])return;
   doMove(r,c);
-  if(!over){
-    busy=true;
-    setInfo('白棋思考中…');
-    botTimer = setTimeout(botTurn, 80); // 🔧 修复：接管定时器
-  }
+  if(!over){busy=true;setInfo('白棋思考中…');botTimer = setTimeout(botTurn, 80);}
 }
 
+// 🔧 修复：落子核心，二次防御，拒绝一切覆盖行为
 function doMove(r,c){
+  if(board[r][c] !== 0) return; // 🔧 只要该位置有棋子，强制 return
+  
   board[r][c]=turn;lastMove=[r,c];
   drawBoard();
   if(checkWin(r,c,turn)){
@@ -137,27 +102,19 @@ function doMove(r,c){
     if(timer){clearInterval(timer);timer=null;}
     const playerWon=(turn===1);
     setInfo((turn===1?'黑棋':'白棋')+' 获胜！');
-    if(playerWon){
-      tryRecord(sec);
-    }
+    if(playerWon) tryRecord(sec);
     save();return;
   }
   if(board.flat().every(v=>v)){
     over=true;
     if(timer){clearInterval(timer);timer=null;}
-    setInfo('平局！');
-    save();return;
+    setInfo('平局！');save();return;
   }
   turn=3-turn;save();
   if(!over)setInfo(turn===1?'黑棋落子':'白棋落子');
 }
 
-function botTurn(){
-  if(over)return;
-  let[r,c]=bestMove(2);
-  busy=false;
-  doMove(r,c);
-}
+function botTurn(){if(over)return;let[r,c]=bestMove(2);busy=false;doMove(r,c);}
 
 function checkWin(r,c,p){
   const dirs=[[1,0],[0,1],[1,1],[1,-1]];
@@ -214,44 +171,29 @@ function evalPoint(r,c,p){
 cvs=document.getElementById('cvs');
 cvs.addEventListener('click',place);
 
-function save(){
-  try{ SafeStorage.setItem('game-'+ID+'-state', JSON.stringify({board,turn,sec,over,lastMove})); }catch{}
-}
+function save(){try{ SafeStorage.setItem('game-'+ID+'-state', JSON.stringify({board,turn,sec,over,lastMove})); }catch{}}
 
 function restore(){
   try{
     const s = JSON.parse(SafeStorage.getItem('game-'+ID+'-state'));
     if(s && s.board && Array.isArray(s.board) && s.board.length===N){
       let isValid = true;
-      for(let i=0; i<N; i++){
-        if(!Array.isArray(s.board[i]) || s.board[i].length !== N) { isValid = false; break; }
-      }
-      
+      for(let i=0; i<N; i++){ if(!Array.isArray(s.board[i]) || s.board[i].length !== N) { isValid = false; break; } }
       if(isValid){
-        board=s.board;turn=s.turn;over=s.over;lastMove=s.lastMove;busy=false;
-        sec=s.sec||0;
+        board=s.board;turn=s.turn;over=s.over;lastMove=s.lastMove;busy=false;sec=s.sec||0;
         if(timer){clearInterval(timer);timer=null;}
         if(botTimer){clearTimeout(botTimer);botTimer=null;}
         cvs=document.getElementById('cvs');
-        
-        size = getCanvasSize();
-        cvs.width = size; 
-        cvs.height = size;
-        
+        size = getCanvasSize(); cvs.width = size; cvs.height = size;
         ctx=cvs.getContext('2d');cell=size/N;
         drawBoard();
         setInfo(over?(s.turn===1?'黑棋落子':'白棋落子'):(turn===1?'黑棋落子':'白棋落子'));
-        
         if(!over){
           timer=setInterval(tick,1000);
           if(turn===2){
-            busy=true;
-            setInfo('白棋思考中…');
-            botTimer = setTimeout(botTurn, 300); // 🔧 修复：这里也要用句柄
+            busy=true; setInfo('白棋思考中…'); botTimer = setTimeout(botTurn, 300);
           }
-        } else {
-           setInfo((turn===1?'黑棋':'白棋')+' 获胜！');
-        }
+        } else { setInfo((turn===1?'黑棋':'白棋')+' 获胜！'); }
         showRecord();
         return true;
       }
@@ -260,16 +202,9 @@ function restore(){
   return false;
 }
 
-function getRecord(){
-  try{ return JSON.parse(SafeStorage.getItem('record-'+ID)) || {name:'',score:Infinity}; }
-  catch{ return {name:'',score:Infinity}; }
-}
+function getRecord(){try{ return JSON.parse(SafeStorage.getItem('record-'+ID)) || {name:'',score:Infinity}; }catch{ return {name:'',score:Infinity}; }}
 function setRecord(name,score){ SafeStorage.setItem('record-'+ID, JSON.stringify({name,score})); }
-function showRecord(){
-  const r=getRecord();
-  document.getElementById('record').textContent=
-    (r.name&&r.score!==Infinity)?('最快获胜：'+r.score+' 秒（'+r.name+'）'):'暂无纪录';
-}
+function showRecord(){ const r=getRecord(); document.getElementById('record').textContent= (r.name&&r.score!==Infinity)?('最快获胜：'+r.score+' 秒（'+r.name+'）'):'暂无纪录'; }
 function tryRecord(newSec){
   const r=getRecord();
   if(newSec<r.score){
@@ -277,7 +212,6 @@ function tryRecord(newSec){
     if(name&&name.trim()){setRecord(name.trim(),newSec);showRecord();}
   }
 }
-
 showRecord();
 if(!restore())init();
 </script>
