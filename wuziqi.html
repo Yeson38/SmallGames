@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>五子棋</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f5f7;color:#222;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
+.bar{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:420px;margin-bottom:12px;gap:8px;flex-wrap:wrap}
+.bar a,.bar button{background:#6B3FA0;border:none;color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:14px;text-decoration:none}
+.bar a:hover,.bar button:hover{background:#56328a}
+canvas{background:#f0d9a0;border:1px solid #b8956a;border-radius:4px;max-width:100%;cursor:pointer;display:block}
+.record{max-width:420px;width:100%;font-size:13px;color:#666;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="javascript:history.back()">返回</a>
+  <span id="info"></span>
+  <button onclick="init()">重新开始</button>
+</div>
+<div class="record" id="record"></div>
+<canvas id="cvs"></canvas>
+<script>
+const ID='gomoku';
+const N=15;
+let board,turn,wins,over,lastMove,busy;
+let cvs,ctx,size,cell;
+
+function init(){
+  board=Array.from({length:N},()=>Array(N).fill(0));
+  turn=1;wins=0;over=false;lastMove=null;busy=false;
+  cvs=document.getElementById('cvs');
+  size=Math.min(window.innerWidth-32,420);
+  cvs.width=size;cvs.height=size;
+  ctx=cvs.getContext('2d');
+  cell=size/N;
+  drawBoard();
+  setInfo('黑棋落子');
+  showRecord();
+  save();
+}
+
+function drawBoard(){
+  ctx.fillStyle='#f0d9a0';ctx.fillRect(0,0,size,size);
+  ctx.strokeStyle='#b8956a';ctx.lineWidth=1;
+  for(let i=0;i<N;i++){
+    ctx.beginPath();ctx.moveTo(cell/2+i*cell,0);ctx.lineTo(cell/2+i*cell,size);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,cell/2+i*cell);ctx.lineTo(size,cell/2+i*cell);ctx.stroke();
+  }
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(board[r][c]){
+      ctx.beginPath();
+      ctx.arc(c*cell+cell/2,r*cell+cell/2,cell*0.4,0,Math.PI*2);
+      ctx.fillStyle=board[r][c]===1?'#000':'#fff';
+      ctx.fill();
+      ctx.strokeStyle=board[r][c]===1?'#000':'#ccc';
+      ctx.lineWidth=1;ctx.stroke();
+    }
+  }
+  if(lastMove){
+    let[lr,lc]=lastMove;
+    ctx.beginPath();
+    ctx.arc(lc*cell+cell/2,lr*cell+cell/2,cell*0.12,0,Math.PI*2);
+    ctx.fillStyle=board[lr][lc]===1?'#fff':'#000';
+    ctx.fill();
+  }
+}
+
+function place(e){
+  if(over||busy||turn!==1)return;
+  const rect=cvs.getBoundingClientRect();
+  const x=e.clientX-rect.left,y=e.clientY-rect.top;
+  const c=Math.round((x-cell/2)/cell),r=Math.round((y-cell/2)/cell);
+  if(r<0||r>=N||c<0||c>=N||board[r][c])return;
+  doMove(r,c);
+  if(!over){busy=true;setInfo('白棋思考中…');setTimeout(botTurn,80);}
+}
+
+function doMove(r,c){
+  board[r][c]=turn;lastMove=[r,c];
+  drawBoard();
+  if(checkWin(r,c,turn)){
+    over=true;wins++;
+    setInfo((turn===1?'黑棋':'白棋')+' 获胜！');
+    tryRecord(wins);save();return;
+  }
+  if(board.flat().every(v=>v)){over=true;setInfo('平局！');save();return;}
+  turn=3-turn;save();
+  if(!over)setInfo(turn===1?'黑棋落子':'白棋落子');
+}
+
+function botTurn(){
+  if(over)return;
+  let[r,c]=bestMove(2);
+  busy=false;
+  doMove(r,c);
+}
+
+function checkWin(r,c,p){
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(let[dr,dc]of dirs){
+    let cnt=1;
+    for(let i=1;i<5;i++){let nr=r+dr*i,nc=c+dc*i;if(nr>=0&&nr<N&&nc>=0&&nc<N&&board[nr][nc]===p)cnt++;else break;}
+    for(let i=1;i<5;i++){let nr=r-dr*i,nc=c-dc*i;if(nr>=0&&nr<N&&nc>=0&&nc<N&&board[nr][nc]===p)cnt++;else break;}
+    if(cnt>=5)return true;
+  }
+  return false;
+}
+
+function bestMove(p){
+  let best=-Infinity,br=7,bc=7;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(board[r][c])continue;
+    if(!near(r,c,2))continue;
+    let a=evalPoint(r,c,p),d=evalPoint(r,c,3-p);
+    let s=a*1.1+d;
+    if(s>best){best=s;br=r;bc=c;}
+  }
+  return[br,bc];
+}
+
+function near(r,c,rad){
+  for(let dr=-rad;dr<=rad;dr++)for(let dc=-rad;dc<=rad;dc++){
+    let nr=r+dr,nc=c+dc;
+    if(nr>=0&&nr<N&&nc>=0&&nc<N&&board[nr][nc])return true;
+  }
+  return false;
+}
+
+function evalPoint(r,c,p){
+  let total=0;
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(let[dr,dc]of dirs){
+    let cnt=1,open=0;
+    let nr=r+dr,nc=c+dc;
+    while(nr>=0&&nr<N&&nc>=0&&nc<N&&board[nr][nc]===p){cnt++;nr+=dr;nc+=dc;}
+    if(nr>=0&&nr<N&&nc>=0&&nc<N&&!board[nr][nc])open++;
+    nr=r-dr;nc=c-dc;
+    while(nr>=0&&nr<N&&nc>=0&&nc<N&&board[nr][nc]===p){cnt++;nr-=dr;nc-=dc;}
+    if(nr>=0&&nr<N&&nc>=0&&nc<N&&!board[nr][nc])open++;
+    if(cnt>=5){total+=100000;continue;}
+    if(open===0)continue;
+    if(cnt===4){total+=open===2?10000:1000;}
+    else if(cnt===3){total+=open===2?1000:100;}
+    else if(cnt===2){total+=open===2?100:10;}
+    else if(cnt===1){total+=open===2?10:1;}
+  }
+  return total;
+}
+
+function setInfo(t){document.getElementById('info').textContent=t;}
+
+cvs=document.getElementById('cvs');
+cvs.addEventListener('click',place);
+
+function save(){try{localStorage.setItem('game-'+ID+'-state',JSON.stringify({board,turn,wins,over,lastMove}));}catch{}}
+function restore(){
+  try{
+    const s=JSON.parse(localStorage.getItem('game-'+ID+'-state'));
+    if(s&&s.board&&s.board.length===N){
+      board=s.board;turn=s.turn;wins=s.wins;over=s.over;lastMove=s.lastMove;busy=false;
+      cvs=document.getElementById('cvs');
+      size=Math.min(window.innerWidth-32,420);
+      cvs.width=size;cvs.height=size;
+      ctx=cvs.getContext('2d');cell=size/N;
+      drawBoard();
+      setInfo(over?(wins?'获胜！':'平局'):(turn===1?'黑棋落子':'白棋落子'));
+      showRecord();
+      return true;
+    }
+  }catch{}
+  return false;
+}
+
+function getRecord(){try{return JSON.parse(localStorage.getItem('record-'+ID))||{name:'',score:0};}catch{return{name:'',score:0};}}
+function setRecord(name,score){localStorage.setItem('record-'+ID,JSON.stringify({name,score}));}
+function showRecord(){const r=getRecord();document.getElementById('record').textContent=r.name?'当前纪录：'+r.score+' 胜（'+r.name+'）':'暂无纪录';}
+function tryRecord(newWins){const r=getRecord();if(newWins>r.score){const name=prompt('破纪录了！请输入你的名字：');if(name&&name.trim()){setRecord(name.trim(),newWins);showRecord();}}}
+
+showRecord();
+if(!restore())init();
+</script>
+</body>
+</html>
