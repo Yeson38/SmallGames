@@ -25,17 +25,56 @@ body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f5f7;c
 <div class="record" id="record"></div>
 <div class="grid" id="grid"></div>
 <script>
-const ID='whack';const DURATION=30;let score,timeLeft,timer,activeHole,running;
-function renderHoles(){let html='';for(let i=0;i<9;i++)html+=`<div class="hole" data-i="${i}"></div>`;document.getElementById('grid').innerHTML=html;
-document.querySelectorAll('.hole').forEach(el=>{el.addEventListener('click',()=>whack(+el.dataset.i));});}
+const ID='whack';const DURATION=30;
+let score,timeLeft,timer,activeHole,running;
+
+// 🔧 安全存储
+const SafeStorage = (function() {
+  let storage;
+  try {
+    const testKey = '__test__';
+    window.localStorage.setItem(testKey, testKey);
+    window.localStorage.removeItem(testKey);
+    storage = window.localStorage;
+  } catch (e) {
+    const memory = {};
+    storage = {
+      getItem: (k) => memory[k] || null,
+      setItem: (k, v) => { memory[k] = String(v); },
+      removeItem: (k) => { delete memory[k]; }
+    };
+  }
+  return storage;
+})();
+
+function renderHoles(){let html='';for(let i=0;i<9;i++)html+=`<div class="hole" data-i="${i}"></div>`;document.getElementById('grid').innerHTML=html;document.querySelectorAll('.hole').forEach(el=>{el.addEventListener('click',()=>whack(+el.dataset.i));});}
 function showMole(){document.querySelectorAll('.hole').forEach(h=>h.classList.remove('up'));activeHole=Math.floor(Math.random()*9);document.querySelectorAll('.hole')[activeHole].classList.add('up');document.querySelectorAll('.hole')[activeHole].textContent='';}
 function whack(i){if(!running||i!==activeHole)return;score++;document.getElementById('info').textContent=`分数: ${score} | 剩余: ${timeLeft}s`;document.querySelectorAll('.hole')[i].classList.remove('up');document.querySelectorAll('.hole')[i].textContent='';activeHole=-1;}
-function startGame(){score=0;timeLeft=DURATION;running=true;activeHole=-1;renderHoles();document.getElementById('startBtn').disabled=true;
-timer=setInterval(()=>{timeLeft--;if(timeLeft<=0){clearInterval(timer);running=false;document.querySelectorAll('.hole').forEach(h=>{h.classList.remove('up');h.textContent='';});document.getElementById('info').textContent='时间到！分数: '+score;document.getElementById('startBtn').disabled=false;tryRecord(score);return;}if(activeHole===-1)showMole();document.getElementById('info').textContent=`分数: ${score} | 剩余: ${timeLeft}s`;},800);showMole();}
+
+function startGame(){
+  score=0;timeLeft=DURATION;running=true;activeHole=-1;
+  renderHoles();
+  document.getElementById('startBtn').disabled=true;
+  // 🔧 修复：每次定时器触发都强制刷新地鼠位置，避免地鼠赖着不走
+  timer=setInterval(()=>{
+    timeLeft--;
+    if(timeLeft<=0){
+      clearInterval(timer);running=false;
+      document.querySelectorAll('.hole').forEach(h=>{h.classList.remove('up');h.textContent='';});
+      document.getElementById('info').textContent='时间到！分数: '+score;
+      document.getElementById('startBtn').disabled=false;
+      tryRecord(score);return;
+    }
+    showMole(); // 🔧 无论上一只地鼠是否被打中，都换位置
+    document.getElementById('info').textContent=`分数: ${score} | 剩余: ${timeLeft}s`;
+  },800);
+  showMole();
+}
 document.getElementById('startBtn').addEventListener('click',startGame);
 renderHoles();document.getElementById('info').textContent=`点击"开始"，限时${DURATION}秒`;
-function getRecord(){try{return JSON.parse(localStorage.getItem('record-'+ID))||{name:'',score:0};}catch{return{name:'',score:0};}}
-function setRecord(name,score){localStorage.setItem('record-'+ID,JSON.stringify({name,score}));}
+
+function getRecord(){try{return JSON.parse(SafeStorage.getItem('record-'+ID))||{name:'',score:0};}catch{return{name:'',score:0};}}
+function setRecord(name,score){SafeStorage.setItem('record-'+ID,JSON.stringify({name,score}));}
 function showRecord(){const r=getRecord();document.getElementById('record').textContent=r.name?'当前纪录：'+r.score+'（'+r.name+'）':'暂无纪录';}
 function tryRecord(newScore){const r=getRecord();if(newScore>r.score){const name=prompt('破纪录了！请输入你的名字：');if(name&&name.trim()){setRecord(name.trim(),newScore);showRecord();}}}
 showRecord();
