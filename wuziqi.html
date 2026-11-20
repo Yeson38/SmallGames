@@ -82,9 +82,14 @@ function doMove(r,c){
   board[r][c]=turn;lastMove=[r,c];
   drawBoard();
   if(checkWin(r,c,turn)){
-    over=true;wins++;
+    over=true;
+    const playerWon = (turn===1);          // 🔧 修复：区分玩家/AI
     setInfo((turn===1?'黑棋':'白棋')+' 获胜！');
-    tryRecord(wins);save();return;
+    if(playerWon){                          // 🔧 修复：仅玩家获胜时计分并判定纪录
+      wins++;
+      tryRecord(wins);
+    }
+    save();return;
   }
   if(board.flat().every(v=>v)){over=true;setInfo('平局！');save();return;}
   turn=3-turn;save();
@@ -168,6 +173,12 @@ function restore(){
       drawBoard();
       setInfo(over?(wins?'获胜！':'平局'):(turn===1?'黑棋落子':'白棋落子'));
       showRecord();
+      // 🔧 修复：如果轮到 AI（白棋）且游戏未结束，恢复 AI 回合
+      if(!over && turn===2){
+        busy=true;
+        setInfo('白棋思考中…');
+        setTimeout(botTurn, 300);
+      }
       return true;
     }
   }catch{}

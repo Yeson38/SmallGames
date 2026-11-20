@@ -96,7 +96,18 @@ function restore(){
   try{
     const s=JSON.parse(localStorage.getItem(SK));
     if(s&&s.cards&&s.cards.length===16){
-      cards=s.cards;first=s.first;second=s.second;locked=s.locked;done=s.done;sec=s.sec||0;
+      cards=s.cards;first=s.first;second=s.second;done=s.done;sec=s.sec||0;
+      // 🔧 修复：不恢复 locked，而是根据 first/second 重建比对状态
+      locked=false;
+      if(first!==null && second!==null){
+        // 保存时正处于两张牌比对中，当场完成比对
+        if(cards[first].v===cards[second].v){
+          cards[first].matched=cards[second].matched=true;
+        } else {
+          cards[first].open=cards[second].open=false;
+        }
+        first=second=null;
+      }
       if(!done&&!timer)timer=setInterval(tick,1000);
       document.getElementById('info').textContent=done?'完成！用时 '+sec+' 秒':'用时: '+sec+' 秒';
       render();return true;
