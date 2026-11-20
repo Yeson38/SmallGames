@@ -27,18 +27,16 @@ const ID='gomoku';
 const N=15;
 let board,turn,over,lastMove,busy;
 let sec,timer,infoBase;
+let botTimer = null; // 🔧 修复：AI 定时器句柄
 
-// 🔧 修复：安全存储封装，完美兼容无 localStorage 权限的沙盒环境
 const SafeStorage = (function() {
   let storage;
   try {
-    // 测试是否允许访问 localStorage
     const testKey = '__test__';
     window.localStorage.setItem(testKey, testKey);
     window.localStorage.removeItem(testKey);
     storage = window.localStorage;
   } catch (e) {
-    // 如果被沙盒限制，降级为内存存储（防止控制台疯狂报错）
     const memory = {};
     storage = {
       getItem: (k) => memory[k] || null,
@@ -56,10 +54,12 @@ function getCanvasSize() {
 }
 
 function init(){
+  if(timer){clearInterval(timer);timer=null;}
+  if(botTimer){clearTimeout(botTimer);botTimer=null;} // 🔧 修复：重开时清空未执行的 AI 回合
+  
   board=Array.from({length:N},()=>Array(N).fill(0));
   turn=1;over=false;lastMove=null;busy=false;
   sec=0;
-  if(timer){clearInterval(timer);timer=null;}
   cvs=document.getElementById('cvs');
   
   size = getCanvasSize();
@@ -122,7 +122,11 @@ function place(e){
   const c=Math.round((x-cell/2)/cell), r=Math.round((y-cell/2)/cell);
   if(r<0||r>=N||c<0||c>=N||board[r][c])return;
   doMove(r,c);
-  if(!over){busy=true;setInfo('白棋思考中…');setTimeout(botTurn,80);}
+  if(!over){
+    busy=true;
+    setInfo('白棋思考中…');
+    botTimer = setTimeout(botTurn, 80); // 🔧 修复：接管定时器
+  }
 }
 
 function doMove(r,c){
@@ -210,7 +214,6 @@ function evalPoint(r,c,p){
 cvs=document.getElementById('cvs');
 cvs.addEventListener('click',place);
 
-// 🔧 全部替换为 SafeStorage
 function save(){
   try{ SafeStorage.setItem('game-'+ID+'-state', JSON.stringify({board,turn,sec,over,lastMove})); }catch{}
 }
@@ -228,6 +231,7 @@ function restore(){
         board=s.board;turn=s.turn;over=s.over;lastMove=s.lastMove;busy=false;
         sec=s.sec||0;
         if(timer){clearInterval(timer);timer=null;}
+        if(botTimer){clearTimeout(botTimer);botTimer=null;}
         cvs=document.getElementById('cvs');
         
         size = getCanvasSize();
@@ -243,7 +247,7 @@ function restore(){
           if(turn===2){
             busy=true;
             setInfo('白棋思考中…');
-            setTimeout(botTurn,300);
+            botTimer = setTimeout(botTurn, 300); // 🔧 修复：这里也要用句柄
           }
         } else {
            setInfo((turn===1?'黑棋':'白棋')+' 获胜！');
