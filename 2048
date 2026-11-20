@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>2048</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f5f7;color:#222;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
+.bar{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:340px;margin-bottom:12px}
+.bar a,.bar button{background:#6B3FA0;border:none;color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:14px;text-decoration:none}
+.bar a:hover,.bar button:hover{background:#56328a}
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tile{width:72px;height:72px;background:#e0dce6;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;user-select:none;color:#333}
+.record{max-width:340px;width:100%;font-size:13px;color:#666;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="javascript:history.back()">返回</a>
+  <span id="info"></span>
+  <button onclick="init()">重新开始</button>
+</div>
+<div class="record" id="record"></div>
+<div class="board" id="board"></div>
+<script>
+const ID='2048';
+let grid,score;
+const colors={0:'#e0dce6',2:'#ede9f3',4:'#dcd3ea',8:'#c4a8e0',16:'#a87ccf',32:'#8b5cbf',64:'#6B3FA0',128:'#56328a',256:'#42256d',512:'#2e1850',1024:'#1f1038',2048:'#0e071a'};
+const textColors={0:'#333',2:'#333',4:'#333',8:'#fff',16:'#fff',32:'#fff',64:'#fff',128:'#fff',256:'#fff',512:'#fff',1024:'#fff',2048:'#fff'};
+function addTile(){let empty=[];grid.forEach((r,ri)=>r.forEach((v,ci)=>{if(!v)empty.push([ri,ci]);}));if(!empty.length)return;let[r,c]=empty[Math.floor(Math.random()*empty.length)];grid[r][c]=Math.random()<0.9?2:4;}
+function slide(row){let a=row.filter(v=>v);for(let i=0;i<a.length-1;i++){if(a[i]===a[i+1]){a[i]*=2;score+=a[i];a.splice(i+1,1);}}while(a.length<4)a.push(0);return a;}
+function rot(g,n){let m=g.length,res=Array.from({length:m},()=>Array(m).fill(0));for(let i=0;i<m;i++)for(let j=0;j<m;j++){let[ni,nj]=n===1?[j,m-1-i]:n===-1?[m-1-j,i]:[i,j];res[ni][nj]=g[i][j];}return res;}
+function move(dir){let old=JSON.stringify(grid);if(dir==='left')grid=grid.map(slide);if(dir==='right')grid=grid.map(r=>slide([...r].reverse()).reverse());if(dir==='up')grid=rot(grid,-1).map(slide).map((r,i)=>{let g2=rot(grid,-1);return slide(g2[i]);});if(dir==='down'){let g2=rot(grid,1);g2=g2.map(slide);grid=rot(g2,-1);}if(JSON.stringify(grid)!==old){addTile();render();setInfo('分数: '+score);checkOver();}}
+function checkOver(){for(let r=0;r<4;r++)for(let c=0;c<4;c++){if(!grid[r][c])return;if(c<3&&grid[r][c]===grid[r][c+1])return;if(r<3&&grid[r][c]===grid[r+1][c])return;}setInfo('游戏结束，分数: '+score);tryRecord(score);}
+function render(){let html='';grid.forEach(r=>r.forEach(v=>{let bg=colors[v]||'#0e071a';let fg=textColors[v]||'#fff';html+=`<div class="tile" style="background:${bg};color:${fg}">${v||''}</div>`;}));document.getElementById('board').innerHTML=html;}
+function setInfo(t){document.getElementById('info').textContent=t;}
+function init(){grid=Array.from({length:4},()=>Array(4).fill(0));score=0;addTile();addTile();render();setInfo('分数: 0');}
+document.addEventListener('keydown',e=>{const map={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};if(map[e.key]){e.preventDefault();move(map[e.key]);}});
+let sx,sy;document.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;});
+document.addEventListener('touchend',e=>{let dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;if(Math.abs(dx)>Math.abs(dy)){move(dx>0?'right':'left');}else{move(dy>0?'down':'up');}});
+function getRecord(){try{return JSON.parse(localStorage.getItem('record-'+ID))||{name:'',score:0};}catch{return{name:'',score:0};}}
+function setRecord(name,score){localStorage.setItem('record-'+ID,JSON.stringify({name,score}));}
+function showRecord(){const r=getRecord();document.getElementById('record').textContent=r.name?'当前纪录：'+r.score+'（'+r.name+'）':'暂无纪录';}
+function tryRecord(newScore){const r=getRecord();if(newScore>r.score){const name=prompt('破纪录了！请输入你的名字：');if(name&&name.trim()){setRecord(name.trim(),newScore);showRecord();}}}
+showRecord();init();
+</script>
+</body>
+</html>
