@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>打地鼠</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f5f7;color:#222;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
+.bar{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:340px;margin-bottom:12px}
+.bar a,.bar button{background:#6B3FA0;border:none;color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:14px;text-decoration:none}
+.bar a:hover,.bar button:hover{background:#56328a}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px;width:100%}
+.hole{aspect-ratio:1;background:#d9d3e2;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;cursor:pointer;user-select:none}
+.hole.up{background:#fff;border:3px solid #6B3FA0}
+.record{max-width:340px;width:100%;font-size:13px;color:#666;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="javascript:history.back()">返回</a>
+  <span id="info"></span>
+  <button id="startBtn">开始</button>
+</div>
+<div class="record" id="record"></div>
+<div class="grid" id="grid"></div>
+<script>
+const ID='whack';const DURATION=30;let score,timeLeft,timer,activeHole,running;
+function renderHoles(){let html='';for(let i=0;i<9;i++)html+=`<div class="hole" data-i="${i}"></div>`;document.getElementById('grid').innerHTML=html;
+document.querySelectorAll('.hole').forEach(el=>{el.addEventListener('click',()=>whack(+el.dataset.i));});}
+function showMole(){document.querySelectorAll('.hole').forEach(h=>h.classList.remove('up'));activeHole=Math.floor(Math.random()*9);document.querySelectorAll('.hole')[activeHole].classList.add('up');document.querySelectorAll('.hole')[activeHole].textContent='';}
+function whack(i){if(!running||i!==activeHole)return;score++;document.getElementById('info').textContent=`分数: ${score} | 剩余: ${timeLeft}s`;document.querySelectorAll('.hole')[i].classList.remove('up');document.querySelectorAll('.hole')[i].textContent='';activeHole=-1;}
+function startGame(){score=0;timeLeft=DURATION;running=true;activeHole=-1;renderHoles();document.getElementById('startBtn').disabled=true;
+timer=setInterval(()=>{timeLeft--;if(timeLeft<=0){clearInterval(timer);running=false;document.querySelectorAll('.hole').forEach(h=>{h.classList.remove('up');h.textContent='';});document.getElementById('info').textContent='时间到！分数: '+score;document.getElementById('startBtn').disabled=false;tryRecord(score);return;}if(activeHole===-1)showMole();document.getElementById('info').textContent=`分数: ${score} | 剩余: ${timeLeft}s`;},800);showMole();}
+document.getElementById('startBtn').addEventListener('click',startGame);
+renderHoles();document.getElementById('info').textContent=`点击"开始"，限时${DURATION}秒`;
+function getRecord(){try{return JSON.parse(localStorage.getItem('record-'+ID))||{name:'',score:0};}catch{return{name:'',score:0};}}
+function setRecord(name,score){localStorage.setItem('record-'+ID,JSON.stringify({name,score}));}
+function showRecord(){const r=getRecord();document.getElementById('record').textContent=r.name?'当前纪录：'+r.score+'（'+r.name+'）':'暂无纪录';}
+function tryRecord(newScore){const r=getRecord();if(newScore>r.score){const name=prompt('破纪录了！请输入你的名字：');if(name&&name.trim()){setRecord(name.trim(),newScore);showRecord();}}}
+showRecord();
+</script>
+</body>
+</html>
