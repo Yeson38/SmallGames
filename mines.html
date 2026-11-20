@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>扫雷</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f5f7;color:#222;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
+.bar{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:340px;margin-bottom:12px}
+.bar button{background:#6B3FA0;border:none;color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:14px;transition:0.2s}
+.bar button:hover{background:#56328a}
+.record{max-width:340px;width:100%;font-size:13px;color:#666;margin-bottom:8px}
+#grid{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;background:#d9d3e2;padding:4px;border-radius:8px;user-select:none;-webkit-touch-callout:none}
+.cell{width:32px;height:32px;background:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;cursor:pointer;transition:background 0.1s}
+.cell:not(.open):hover{background:#ede9f3}
+.cell.open{background:#e0dce6;cursor:default}
+.cell.mine{background:#ff5252;color:#fff}
+.cell[data-n="1"]{color:#1976d2}.cell[data-n="2"]{color:#388e3c}.cell[data-n="3"]{color:#d32f2f}.cell[data-n="4"]{color:#7b1fa2}.cell[data-n="5"]{color:#ff8f00}.cell[data-n="6"]{color:#0097a7}.cell[data-n="7"]{color:#333}.cell[data-n="8"]{color:#666}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span id="info">点击开始</span>
+  <button onclick="init()">重新开始</button>
+</div>
+<div class="record" id="record"></div>
+<div id="grid"></div>
+<script>
+const ID='minesweeper';const N=9;const MINES=10;
+let board,state,opened,flags,over,started,timer,sec;
+
+const SafeStorage = (function() {
+  let storage;
+  try { const t='__t__'; window.localStorage.setItem(t,t); window.localStorage.removeItem(t); storage=window.localStorage; } 
+  catch(e) { const m={}; storage={getItem:k=>m[k]||null,setItem:(k,v)=>m[k]=String(v),removeItem:k=>delete m[k]}; }
+  return storage;
+})();
+
+function init(){
+  if(timer){clearInterval(timer);timer=null;}
+  board=Array.from({length:N},()=>Array(N).fill(0));
+  // 状态机：0 隐藏，1 翻开，2 旗子，3 问号
+  state=Array.from({length:N},()=>Array(N).fill(0)); 
+  opened=0; flags=0; over=false; started=false; sec=0;
+  document.getElementById('info').textContent='点击开始';
+  render();
+}
+
+function render(){
+  let html='';
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    let cls='cell', text='';
+    let v = board[r][c];
+    let st = state[r][c];
+    
+    if(st===1){ // 已翻开
+      cls+=' open';
+      if(v===9){ cls+=' mine'; text='💣'; }
+      else if(v>0){ text=v; }
+    } else if(st===2){ // 🚩
+      text='🚩';
+    } else if(st===3){ // ❓
+      text='❓';
+    }
+    
+    html+=`<div class="${cls}" data-r="${r}" data-c="${c}" data-n="${text}">${text}</div>`;
+  }
+  document.getElementById('grid').innerHTML=html;
+}
+
+function placeMines(sr, sc) {
+  let count = 0;
+  while(count < MINES){
+    let r = Math.floor(Math.random()*N), c = Math.floor(Math.random()*N);
+    // 第一次点击的位置及其周围 9 宫格绝不放雷，保证开局体验
+    if(board[r][c] === 9 || (Math.abs(r-sr)<=1 && Math.abs(c-sc)<=1)) continue;
+    board[r][c] = 9; count++;
+  }
+  // 计算数字
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(board[r][c]===9) continue;
+    let m=0;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      let nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<N&&nc>=0&&nc<N&&board[nr][nc]===9) m++;
+    }
+    board[r][c]=m;
+  }
+}
+
+function openCell(r,c){
+  // 已翻开或插旗不可左键（问号可以直接点开）
+  if(over || state[r][c]===1 || state[r][c]===2) return; 
+  
+  if(!started){
+    placeMines(r,c);
+    started=true;
+    timer=setInterval(()=>{ sec++; document.getElementById('info').textContent='用时: '+sec+' 秒'; },1000);
+    document.getElementById('info').textContent='用时: 0 秒';
+  }
+  
+  if(board[r][c]===9){ // 踩雷
+    over=true; clearInterval(timer);
+    for(let i=0;i<N;i++)for(let j=0;j<N;j++) if(board[i][j]===9) state[i][j]=1;
+    state[r][c]=1;
+    render(); 
+    document.getElementById('info').textContent='踩雷了！';
+    return;
+  }
+  
+  // 洪水填充（BFS）
+  let stack=[[r,c]];
+  while(stack.length){
+    let [cr,cc]=stack.pop();
+    if(cr<0||cr>=N||cc<0||cc>=N||state[cr][cc]===1||state[cr][cc]===2) continue;
+    
+    state[cr][cc]=1;
+    opened++;
+    
+    if(board[cr][cc]===0){
+      for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++) if(dr||dc) stack.push([cr+dr,cc+dc]);
+    }
+  }
+  render();
+  
+  if(opened === N*N - MINES){
+    over=true; clearInterval(timer);
+    document.getElementById('info').textContent='全部扫清！用时 '+sec+' 秒';
+    tryRecord(sec);
+  }
+}
+
+function toggleFlag(r,c){
+  if(over || state[r][c]===1) return;
+  if(state[r][c]===0){
+    state[r][c]=2; flags++;
+  } else if(state[r][c]===2){
+    state[r][c]=3; flags--;
+  } else if(state[r][c]===3){
+    state[r][c]=0;
+  }
+  render();
+}
+
+// 事件监听（PC右键 + 移动端长按）
+let isTouch=false, pressTimer=null, isLongPress=false;
+const gridEl = document.getElementById('grid');
+
+gridEl.addEventListener('touchstart', e => {
+  const el = e.target.closest('.cell');
+  if(!el) return;
+  isTouch = true;
+  isLongPress = false;
+  // 长按 400ms 触发标记
+  pressTimer = setTimeout(() => {
+    isLongPress = true;
+    toggleFlag(+el.dataset.r, +el.dataset.c);
+  }, 400);
+  e.preventDefault(); // 阻止系统长按菜单
+}, {passive:false});
+
+gridEl.addEventListener('touchend', e => {
+  clearTimeout(pressTimer);
+  if(!isLongPress){
+    const el = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    const cell = el && el.closest('.cell');
+    if(cell) openCell(+cell.dataset.r, +cell.dataset.c);
+  }
+  e.preventDefault();
+});
+
+gridEl.addEventListener('touchmove', e => {
+  clearTimeout(pressTimer);
+  isLongPress = true; // 滑动页面时取消点击
+});
+
+gridEl.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const el = e.target.closest('.cell');
+  if(el) toggleFlag(+el.dataset.r, +el.dataset.c);
+});
+
+gridEl.addEventListener('click', e => {
+  if(isTouch){ isTouch = false; return; } // 跳过触屏产生的模拟点击
+  const el = e.target.closest('.cell');
+  if(el) openCell(+el.dataset.r, +el.dataset.c);
+});
+
+function getRecord(){try{return JSON.parse(SafeStorage.getItem('record-'+ID))||{name:'',score:Infinity};}catch{return{name:'',score:Infinity};}}
+function setRecord(name,score){SafeStorage.setItem('record-'+ID,JSON.stringify({name,score}));}
+function showRecord(){const r=getRecord();document.getElementById('record').textContent=r.name&&r.score!==Infinity?'当前纪录：'+r.score+' 秒（'+r.name+'）':'暂无纪录';}
+function tryRecord(newSec){const r=getRecord();if(newSec<r.score){const name=prompt('破纪录了！用时 '+newSec+' 秒，请输入你的名字：');if(name&&name.trim()){setRecord(name.trim(),newSec);showRecord();}}}
+
+showRecord();init();
+</script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>数字华容道</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f5f7;color:#222;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
+.bar{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:340px;margin-bottom:12px}
+.bar button{background:#6B3FA0;border:none;color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:14px}
+.bar button:hover{background:#56328a}
+.record{max-width:340px;width:100%;font-size:13px;color:#666;margin-bottom:8px}
+#board{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-width:340px;width:100%}
+.tile{aspect-ratio:1;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:bold;color:#6B3FA0;cursor:pointer;user-select:none;transition:transform 0.1s}
+.tile.empty{background:transparent;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span id="info">步数: 0</span>
+  <button onclick="init()">重新开始</button>
+</div>
+<div class="record" id="record"></div>
+<div id="board"></div>
+<script>
+const ID='puzzle';const N=4;
+let tiles,steps,over,emptyIdx;
+
+const SafeStorage = (function() {
+  let storage;
+  try { const t='__t__'; window.localStorage.setItem(t,t); window.localStorage.removeItem(t); storage=window.localStorage; } 
+  catch(e) { const m={}; storage={getItem:k=>m[k]||null,setItem:(k,v)=>m[k]=String(v),removeItem:k=>delete m[k]}; }
+  return storage;
+})();
+
+function init(){
+  tiles=Array.from({length:N*N},(_,i)=>i); // 0-15, 15 是空位
+  steps=0; over=false;
+  
+  // 随机打乱，保证有解（通过随机合法移动来实现）
+  let empty=15;
+  for(let i=0;i<100;i++){
+    let r=Math.floor(empty/N), c=empty%N;
+    let dirs=[[0,1],[0,-1],[1,0],[-1,0]].filter(([dr,dc])=>r+dr>=0&&r+dr<N&&c+dc>=0&&c+dc<N);
+    let [dr,dc]=dirs[Math.floor(Math.random()*dirs.length)];
+    let next=(r+dr)*N+(c+dc);
+    [tiles[empty],tiles[next]]=[tiles[next],tiles[empty]];
+    empty=next;
+  }
+  emptyIdx=tiles.indexOf(15);
+  
+  document.getElementById('info').textContent='步数: 0';
+  render();
+}
+
+function render(){
+  let html='';
+  tiles.forEach((v,i)=>{
+    let cls = v===15 ? 'tile empty' : 'tile';
+    html += `<div class="${cls}" data-i="${i}">${v===15?'':v+1}</div>`;
+  });
+  document.getElementById('board').innerHTML=html;
+}
+
+document.getElementById('board').addEventListener('click', e=>{
+  if(over) return;
+  const el = e.target.closest('.tile');
+  if(!el || el.classList.contains('empty')) return;
+  
+  let idx = +el.dataset.i;
+  let r1=Math.floor(idx/N), c1=idx%N;
+  let r2=Math.floor(emptyIdx/N), c2=emptyIdx%N;
+  
+  // 判断是否相邻
+  if(Math.abs(r1-r2)+Math.abs(c1-c2)===1){
+    [tiles[idx],tiles[emptyIdx]]=[tiles[emptyIdx],tiles[idx]];
+    emptyIdx=idx;
+    steps++;
+    document.getElementById('info').textContent='步数: '+steps;
+    render();
+    checkWin();
+  }
+});
+
+function checkWin(){
+  for(let i=0;i<15;i++){
+    if(tiles[i]!==i) return;
+  }
+  over=true;
+  document.getElementById('info').textContent='完成！共 '+steps+' 步';
+  tryRecord(steps);
+}
+
+function getRecord(){try{return JSON.parse(SafeStorage.getItem('record-'+ID))||{name:'',score:Infinity};}catch{return{name:'',score:Infinity};}}
+function setRecord(name,score){SafeStorage.setItem('record-'+ID,JSON.stringify({name,score}));}
+function showRecord(){const r=getRecord();document.getElementById('record').textContent=r.name&&r.score!==Infinity?'最少步数：'+r.score+' 步（'+r.name+'）':'暂无纪录';}
+function tryRecord(newScore){const r=getRecord();if(newScore<r.score){const name=prompt('破纪录了！共 '+newScore+' 步，请输入你的名字：');if(name&&name.trim()){setRecord(name.trim(),newScore);showRecord();}}}
+
+showRecord();init();
+</script>
+</body>
+</html>

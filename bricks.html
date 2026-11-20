@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>打砖块</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f5f7;color:#222;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px}
+.bar{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:340px;margin-bottom:12px}
+.bar button{background:#6B3FA0;border:none;color:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-size:14px}
+.bar button:hover{background:#56328a}
+.record{max-width:340px;width:100%;font-size:13px;color:#666;margin-bottom:8px}
+canvas{background:#fff;border:1px solid #d9d3e2;border-radius:8px;max-width:100%;touch-action:none;cursor:none}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span id="info">点击开始</span>
+  <button onclick="init()">重新开始</button>
+</div>
+<div class="record" id="record"></div>
+<canvas id="cvs"></canvas>
+<script>
+const ID='breakout';
+// 🔧 修复：把 cvs 和 ctx 提到外面，防止事件绑定报错
+let cvs = document.getElementById('cvs');
+let ctx = cvs.getContext('2d');
+let W,H;
+let paddle,ball,bricks,score,totalBricks,over,started,sec,timer,reqId;
+let leftPressed=false, rightPressed=false;
+
+const SafeStorage = (function() {
+  let storage;
+  try { const t='__t__'; window.localStorage.setItem(t,t); window.localStorage.removeItem(t); storage=window.localStorage; } 
+  catch(e) { const m={}; storage={getItem:k=>m[k]||null,setItem:(k,v)=>m[k]=String(v),removeItem:k=>delete m[k]}; }
+  return storage;
+})();
+
+function getCanvasSize(){
+  let w=window.innerWidth||document.documentElement.clientWidth||document.body.clientWidth||420;
+  let s=Math.min(w-32,340);
+  return (isNaN(s)||s<100)?300:s;
+}
+
+function init(){
+  if(timer){clearInterval(timer);timer=null;}
+  if(reqId){cancelAnimationFrame(reqId);reqId=null;}
+  
+  W=getCanvasSize();
+  H=Math.floor(W*1.2);
+  cvs.width=W;cvs.height=H;
+  
+  paddle={w:70,h:10,x:W/2-35,y:H-30,speed:7};
+  ball={x:W/2,y:H-40,r:6,dx:3,dy:-3};
+  bricks=[];
+  let cols=5,rows=4,bw=W/cols,bh=20;
+  totalBricks=cols*rows;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      bricks.push({x:c*bw,y:r*bh+20,w:bw-2,h:bh-2,hit:false});
+    }
+  }
+  score=0;over=false;started=false;sec=0;
+  document.getElementById('info').textContent='点击开始';
+  draw();
+}
+
+function tick(){
+  if(!started || over) return;
+  sec++;
+  document.getElementById('info').textContent='用时: '+sec+' 秒';
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  bricks.forEach(b=>{
+    if(!b.hit){
+      ctx.fillStyle='#6B3FA0';
+      ctx.fillRect(b.x,b.y,b.w,b.h);
+    }
+  });
+  ctx.fillStyle='#56328a';
+  ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
+  ctx.beginPath();
+  ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);
+  ctx.fillStyle='#333';
+  ctx.fill();
+}
+
+function update(){
+  if(!started || over) return;
+  
+  if(leftPressed && paddle.x>0) paddle.x-=paddle.speed;
+  if(rightPressed && paddle.x<W-paddle.w) paddle.x+=paddle.speed;
+  
+  ball.x+=ball.dx;
+  ball.y+=ball.dy;
+  
+  if(ball.x+ball.r>W || ball.x-ball.r<0) ball.dx*=-1;
+  if(ball.y-ball.r<0) ball.dy*=-1;
+  
+  if(ball.y+ball.r>H){
+    over=true;
+    clearInterval(timer);
+    document.getElementById('info').textContent='游戏结束，已击碎 '+score+' 块';
+    return;
+  }
+  
+  if(ball.y+ball.r>paddle.y && ball.x>paddle.x && ball.x<paddle.x+paddle.w){
+    ball.dy=-Math.abs(ball.dy); 
+    let hitPos=(ball.x-paddle.x)/paddle.w;
+    ball.dx=3+(hitPos-0.5)*4; 
+  }
+  
+  bricks.forEach(b=>{
+    if(b.hit) return;
+    if(ball.x+ball.r>b.x && ball.x-ball.r<b.x+b.w && ball.y+ball.r>b.y && ball.y-ball.r<b.y+b.h){
+      ball.dy*=-1;
+      b.hit=true;
+      score++;
+      
+      if(score===totalBricks){
+        over=true;
+        clearInterval(timer);
+        document.getElementById('info').textContent='通关！用时 '+sec+' 秒';
+        tryRecord(sec);
+      }
+    }
+  });
+  draw();
+  reqId=requestAnimationFrame(update);
+}
+
+// 此时 cvs 已经有值了
+cvs.addEventListener('mousemove', e=>{
+  if(started && !over){
+    let rect=cvs.getBoundingClientRect();
+    let rx=(e.clientX-rect.left)*(W/rect.width);
+    paddle.x=Math.max(0,Math.min(W-paddle.w,rx-paddle.w/2));
+  }
+});
+cvs.addEventListener('touchmove', e=>{
+  if(started && !over){
+    let rect=cvs.getBoundingClientRect();
+    let rx=(e.touches[0].clientX-rect.left)*(W/rect.width);
+    paddle.x=Math.max(0,Math.min(W-paddle.w,rx-paddle.w/2));
+    e.preventDefault();
+  }
+},{passive:false});
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowLeft') leftPressed=true;
+  if(e.key==='ArrowRight') rightPressed=true;
+});
+document.addEventListener('keyup', e=>{
+  if(e.key==='ArrowLeft') leftPressed=false;
+  if(e.key==='ArrowRight') rightPressed=false;
+});
+
+cvs.addEventListener('click', ()=>{
+  if(!started){
+    started=true;
+    timer=setInterval(tick,1000);
+    document.getElementById('info').textContent='用时: 0 秒';
+    update();
+  }
+});
+
+function getRecord(){try{return JSON.parse(SafeStorage.getItem('record-'+ID))||{name:'',score:Infinity};}catch{return{name:'',score:Infinity};}}
+function setRecord(name,score){SafeStorage.setItem('record-'+ID,JSON.stringify({name,score}));}
+function showRecord(){const r=getRecord();document.getElementById('record').textContent=r.name&&r.score!==Infinity?'最快通关：'+r.score+' 秒（'+r.name+'）':'暂无纪录';}
+function tryRecord(newSec){const r=getRecord();if(newSec<r.score){const name=prompt('破纪录了！用时 '+newSec+' 秒，请输入你的名字：');if(name&&name.trim()){setRecord(name.trim(),newSec);showRecord();}}}
+
+showRecord();init();
+</script>
+</body>
+</html>
